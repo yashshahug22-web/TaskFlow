@@ -37,11 +37,14 @@ function WorkspaceDropdown() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    const prevOrgIdRef = useRef(null);
+
     useEffect(() => {
-        if(currentWorkspace && isLoaded){
-            setActive({organization: currentWorkspace.id});
+        if (currentWorkspace?.id && isLoaded && prevOrgIdRef.current !== currentWorkspace.id) {
+            prevOrgIdRef.current = currentWorkspace.id;
+            setActive({ organization: currentWorkspace.id });
         }
-    }, [isLoaded, currentWorkspace]);
+    }, [isLoaded, currentWorkspace?.id, setActive]);
 
     return (
         <div className="relative m-4" ref={dropdownRef}>

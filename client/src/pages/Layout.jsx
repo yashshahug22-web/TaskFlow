@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
 import { Outlet } from 'react-router-dom'
@@ -18,6 +18,8 @@ const Layout = () => {
         userMemberships: true
     });
 
+    const isFetchingRef = useRef(false);
+
     // Initial load of theme 
     useEffect(() => {
         dispatch(loadTheme())
@@ -25,10 +27,13 @@ const Layout = () => {
 
     // Load workspaces whenever user is loaded or organization memberships change
     useEffect(() => {
-        if (isLoaded && user) {
-            dispatch(fetchWorkspaces({ getToken }));
+        if (isLoaded && user?.id && !isFetchingRef.current) {
+            isFetchingRef.current = true;
+            dispatch(fetchWorkspaces({ getToken })).finally(() => {
+                isFetchingRef.current = false;
+            });
         }
-    }, [user, isLoaded, userMemberships?.data?.length, dispatch, getToken]);
+    }, [isLoaded, user?.id, userMemberships?.data?.length, dispatch]);
 
     if (!isLoaded || !isOrgListLoaded) {
         return (
@@ -46,8 +51,8 @@ const Layout = () => {
         )
     }
 
-    // While fetching workspaces
-    if (loading || !hasFetched) {
+    // Only show full-screen loader on initial boot
+    if (!hasFetched) {
         return (
             <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
                 <Loader2Icon className="size-7 text-blue-500 animate-spin" />

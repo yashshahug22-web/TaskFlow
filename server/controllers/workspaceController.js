@@ -21,64 +21,66 @@ export const syncUserAndWorkspacesFromClerk = async (userId) => {
 
         // Fetch organization memberships from Clerk
         const memberships = await clerkClient.users.getOrganizationMembershipList({ userId });
-        if (memberships?.data) {
-            for (const m of memberships.data) {
-                const org = m.organization;
-                const ownerId = org.createdBy || userId;
+        if (memberships?.data?.length > 0) {
+            await Promise.all(
+                memberships.data.map(async (m) => {
+                    const org = m.organization;
+                    const ownerId = org.createdBy || userId;
 
-                // Ensure owner exists in database if different from current user
-                if (ownerId !== userId) {
-                    const ownerExists = await prisma.user.findUnique({ where: { id: ownerId } });
-                    if (!ownerExists) {
-                        try {
-                            const clerkOwner = await clerkClient.users.getUser(ownerId);
-                            const ownerEmail = clerkOwner.emailAddresses?.[0]?.emailAddress || '';
-                            const ownerName = [clerkOwner.firstName, clerkOwner.lastName].filter(Boolean).join(' ') || 'User';
-                            await prisma.user.upsert({
-                                where: { id: ownerId },
-                                update: { name: ownerName, email: ownerEmail, image: clerkOwner.imageUrl || '' },
-                                create: { id: ownerId, name: ownerName, email: ownerEmail, image: clerkOwner.imageUrl || '' }
-                            });
-                        } catch (err) {
-                            console.error('Error syncing owner user from Clerk:', err);
+                    // Ensure owner exists in database if different from current user
+                    if (ownerId !== userId) {
+                        const ownerExists = await prisma.user.findUnique({ where: { id: ownerId } });
+                        if (!ownerExists) {
+                            try {
+                                const clerkOwner = await clerkClient.users.getUser(ownerId);
+                                const ownerEmail = clerkOwner.emailAddresses?.[0]?.emailAddress || '';
+                                const ownerName = [clerkOwner.firstName, clerkOwner.lastName].filter(Boolean).join(' ') || 'User';
+                                await prisma.user.upsert({
+                                    where: { id: ownerId },
+                                    update: { name: ownerName, email: ownerEmail, image: clerkOwner.imageUrl || '' },
+                                    create: { id: ownerId, name: ownerName, email: ownerEmail, image: clerkOwner.imageUrl || '' }
+                                });
+                            } catch (err) {
+                                console.error('Error syncing owner user from Clerk:', err);
+                            }
                         }
                     }
-                }
 
-                // Upsert workspace
-                await prisma.workspace.upsert({
-                    where: { id: org.id },
-                    update: {
-                        name: org.name,
-                        slug: org.slug || org.id,
-                        image_url: org.imageUrl || ''
-                    },
-                    create: {
-                        id: org.id,
-                        name: org.name,
-                        slug: org.slug || org.id,
-                        ownerId,
-                        image_url: org.imageUrl || ''
-                    }
-                });
+                    // Upsert workspace
+                    await prisma.workspace.upsert({
+                        where: { id: org.id },
+                        update: {
+                            name: org.name,
+                            slug: org.slug || org.id,
+                            image_url: org.imageUrl || ''
+                        },
+                        create: {
+                            id: org.id,
+                            name: org.name,
+                            slug: org.slug || org.id,
+                            ownerId,
+                            image_url: org.imageUrl || ''
+                        }
+                    });
 
-                // Upsert membership
-                const role = (m.role === 'org:admin' || m.role === 'ADMIN') ? 'ADMIN' : 'MEMBER';
-                await prisma.workspaceMember.upsert({
-                    where: {
-                        userId_workspaceId: {
+                    // Upsert membership
+                    const role = (m.role === 'org:admin' || m.role === 'ADMIN') ? 'ADMIN' : 'MEMBER';
+                    await prisma.workspaceMember.upsert({
+                        where: {
+                            userId_workspaceId: {
+                                userId,
+                                workspaceId: org.id
+                            }
+                        },
+                        update: { role },
+                        create: {
                             userId,
-                            workspaceId: org.id
+                            workspaceId: org.id,
+                            role
                         }
-                    },
-                    update: { role },
-                    create: {
-                        userId,
-                        workspaceId: org.id,
-                        role
-                    }
-                });
-            }
+                    });
+                })
+            );
         }
     } catch (error) {
         console.error('Error syncing user and workspaces from Clerk:', error);
@@ -93,8 +95,15 @@ export const getUserWorkspaces = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        // Auto-sync user and organizations from Clerk to ensure DB is up to date
-        await syncUserAndWorkspacesFromClerk(userId);
+        // Fast check: how many workspaces does the user have in DB?
+        const existingCount = await prisma.workspaceMember.count({
+            where: { userId }
+        });
+
+        // Only do the heavy Clerk API sync if user has 0 workspaces in DB or explicitly asked via ?sync=true
+        if (existingCount === 0 || req.query.sync === 'true') {
+            await syncUserAndWorkspacesFromClerk(userId);
+        }
 
         const workspaces = await prisma.workspace.findMany({
             where: {
