@@ -51,33 +51,34 @@ export default function StatsGrid() {
     ];
 
     useEffect(() => {
-        if (!currentWorkspace) return;
+        if (!currentWorkspace || !currentWorkspace.projects) return;
 
+        const projects = currentWorkspace.projects || [];
         setStats({
-            totalProjects: currentWorkspace.projects.length,
+            totalProjects: projects.length,
 
-            activeProjects: currentWorkspace.projects.filter(
+            activeProjects: projects.filter(
                 (p) => p.status !== "CANCELLED" && p.status !== "COMPLETED"
             ).length,
 
-            completedProjects: currentWorkspace.projects
+            completedProjects: projects
                 .filter((p) => p.status === "COMPLETED")
-                .reduce((acc, project) => acc + project.tasks.length, 0),
+                .reduce((acc, project) => acc + (project.tasks?.length || 0), 0),
 
-            myTasks: currentWorkspace.projects.reduce(
+            myTasks: projects.reduce(
                 (acc, project) =>
                     acc +
-                    project.tasks.filter(
+                    (project.tasks || []).filter(
                         (t) =>
                             t.assignee?.email === currentWorkspace.owner?.email
                     ).length,
                 0
             ),
 
-            overdueIssues: currentWorkspace.projects.reduce(
+            overdueIssues: projects.reduce(
                 (acc, project) =>
                     acc +
-                    project.tasks.filter(
+                    (project.tasks || []).filter(
                         (t) => t.due_date && new Date(t.due_date) < new Date()
                     ).length,
                 0

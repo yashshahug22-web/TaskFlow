@@ -11,7 +11,7 @@ const transporter = nodemailer.createTransport({
 
 const sendEmail = async ({to, subject, body}) => {
     const response = await transporter.sendMail({
-    from: process.env.BREVO_SENDER_EMAIL, // sender address
+    from: process.env.SENDER_EMAIL, // sender address
     to,
     subject,
     html: body, // HTML version of the message

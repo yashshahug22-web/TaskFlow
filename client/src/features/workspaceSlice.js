@@ -21,7 +21,8 @@ export const fetchWorkspaces = createAsyncThunk("workspace/fetchWorkspaces", asy
 const initialState = {
     workspaces: [],
     currentWorkspace: null,
-    loading: false,
+    loading: true,
+    hasFetched: false,
 };
 
 const workspaceSlice = createSlice({
@@ -138,11 +139,15 @@ const workspaceSlice = createSlice({
                 } else {
                     state.currentWorkspace = action.payload[0];
                 }
+            } else {
+                state.currentWorkspace = null;
             }
             state.loading = false;
+            state.hasFetched = true;
         });
         builder.addCase(fetchWorkspaces.rejected, (state) => {
             state.loading = false;
+            state.hasFetched = true;
         });
     }
 

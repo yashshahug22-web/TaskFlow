@@ -5,30 +5,40 @@ import { Outlet } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { loadTheme } from '../features/themeSlice'
 import { Loader2Icon } from 'lucide-react'
-import { useUser, SignIn, useAuth, CreateOrganization } from '@clerk/clerk-react';
+import { useUser, SignIn, useAuth, CreateOrganization, useOrganizationList } from '@clerk/clerk-react';
 import { fetchWorkspaces } from '../features/workspaceSlice'
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-    const { loading, workspaces } = useSelector((state) => state.workspace)
+    const { loading, workspaces, hasFetched } = useSelector((state) => state.workspace)
     const dispatch = useDispatch()
-    const {user, isLoaded} = useUser();
+    const { user, isLoaded } = useUser();
     const { getToken } = useAuth();
+    const { userMemberships, isLoaded: isOrgListLoaded } = useOrganizationList({
+        userMemberships: true
+    });
 
     // Initial load of theme 
     useEffect(() => {
         dispatch(loadTheme())
-    }, [])
+    }, [dispatch])
 
-    //initial load of workspaces
+    // Load workspaces whenever user is loaded or organization memberships change
     useEffect(() => {
-        if(isLoaded && user && workspaces.length === 0){
-            dispatch(fetchWorkspaces({getToken}));
+        if (isLoaded && user) {
+            dispatch(fetchWorkspaces({ getToken }));
         }
-    }, [user,isLoaded]);
+    }, [user, isLoaded, userMemberships?.data?.length, dispatch, getToken]);
 
-    
-    if(!user){
+    if (!isLoaded || !isOrgListLoaded) {
+        return (
+            <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
+                <Loader2Icon className="size-7 text-blue-500 animate-spin" />
+            </div>
+        )
+    }
+
+    if (!user) {
         return (
             <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
                 <SignIn />
@@ -36,13 +46,17 @@ const Layout = () => {
         )
     }
 
-    if (loading) return (
-        <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
-            <Loader2Icon className="size-7 text-blue-500 animate-spin" />
-        </div>
-    )
+    // While fetching workspaces, or while syncing organizations from Clerk into DB
+    if (loading || !hasFetched || (userMemberships?.data?.length > 0 && workspaces.length === 0)) {
+        return (
+            <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
+                <Loader2Icon className="size-7 text-blue-500 animate-spin" />
+            </div>
+        )
+    }
 
-    if(user && workspaces.length === 0){
+    // Only prompt to create organization if the user truly has NO organizations in Clerk and NO workspaces
+    if (user && isOrgListLoaded && userMemberships?.data?.length === 0 && workspaces.length === 0) {
         return (
             <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
                 <CreateOrganization

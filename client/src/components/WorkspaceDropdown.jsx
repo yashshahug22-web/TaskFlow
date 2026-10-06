@@ -3,7 +3,7 @@ import { ChevronDown, Check, Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { setCurrentWorkspace } from "../features/workspaceSlice";
 import { useNavigate } from "react-router-dom";
-import { dummyWorkspaces } from "../assets/assets";
+import { assets } from "../assets/assets";
 import { useClerk, useOrganizationList } from "@clerk/clerk-react";
 
 function WorkspaceDropdown() {
@@ -47,7 +47,7 @@ function WorkspaceDropdown() {
         <div className="relative m-4" ref={dropdownRef}>
             <button onClick={() => setIsOpen(prev => !prev)} className="w-full flex items-center justify-between p-3 h-auto text-left rounded hover:bg-gray-100 dark:hover:bg-zinc-800" >
                 <div className="flex items-center gap-3">
-                    <img src={currentWorkspace?.image_url} alt={currentWorkspace?.name} className="w-8 h-8 rounded shadow" />
+                    <img src={currentWorkspace?.image_url || assets.workspace_img_default} alt={currentWorkspace?.name} className="w-8 h-8 rounded shadow object-cover" />
                     <div className="min-w-0 flex-1">
                         <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">
                             {currentWorkspace?.name || "Select Workspace"}
@@ -66,15 +66,15 @@ function WorkspaceDropdown() {
                         <p className="text-xs text-gray-500 dark:text-zinc-400 uppercase tracking-wider mb-2 px-2">
                             Workspaces
                         </p>
-                        {userMemberships.data.map(({organization}) => (
+                        {userMemberships?.data?.map(({organization}) => (
                             <div key={organization.id} onClick={() => onSelectWorkspace(organization.id)} className="flex items-center gap-3 p-2 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-zinc-800" >
-                                <img src={organization.imageUrl} alt={organization.name} className="w-6 h-6 rounded" />
+                                <img src={organization.imageUrl || assets.workspace_img_default} alt={organization.name} className="w-6 h-6 rounded object-cover" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-800 dark:text-white truncate">
                                         {organization.name}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
-                                        {organization .membersCount || 0} members
+                                        {organization.membersCount || 0} members
                                     </p>
                                 </div>
                                 {currentWorkspace?.id === organization.id && (
