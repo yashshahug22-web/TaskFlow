@@ -1,43 +1,51 @@
 
-
 //add comment
-
 import { prisma } from "../config/prisma.js";
 
 export const addComment = async (req, res) => {
     try {
-        const {userId} = req.auth()
-        const {taskId, content} = req.body
+        const { userId } = await req.auth()   // ← was missing await
+        const { taskId, content } = req.body
 
-        //check if user is project member
+        if (!content?.trim()) {
+            return res.status(400).json({ message: 'Comment cannot be empty' })
+        }
+
+        // Check user is a workspace member (not just project member)
         const task = await prisma.task.findUnique({
-            where: {id: taskId},
-        });
-        const project = await prisma.project.findUnique({
-            where: {id: task.projectId},
-            include: {members: {include: {user: true}}}
-        });
-        if(!project) {
-            return res.status(404).json({message: 'Project not found'})
-        }
-
-        const member = project.members.find((member) => member.user.id === userId);
-        if(!member) {
-            return res.status(403).json({message: 'You do not have permission to comment on this task'})
-        }
-
-        const comment = await prisma.comment.create({
-            data: {
-                taskId,
-                userId,
-                content,
+            where: { id: taskId },
+            include: {
+                project: {
+                    include: {
+                        workspace: { include: { members: true } }
+                    }
+                }
             }
         });
 
-        res.json({comment, message: 'Comment added successfully'});
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' })
+        }
+
+        const workspace = task.project.workspace;
+        const isWorkspaceMember =
+            workspace.ownerId === userId ||
+            workspace.members.some(m => m.userId === userId);
+
+        if (!isWorkspaceMember) {
+            return res.status(403).json({ message: 'You do not have permission to comment on this task' })
+        }
+
+        // Create comment and return it with user data so the client can render immediately
+        const comment = await prisma.comment.create({
+            data: { taskId, userId, content: content.trim() },
+            include: { user: true }
+        });
+
+        res.json({ comment, message: 'Comment added successfully' });
     } catch (error) {
         console.error(error);
-        res.status(500).json({message:error.code || error.message});
+        res.status(500).json({ message: error.code || error.message });
     }
 }
 

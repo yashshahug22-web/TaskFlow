@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Mail, UserPlus } from "lucide-react";
 import { useSelector } from "react-redux";
-import { useOrganization } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import toast from "react-hot-toast";
+import api from "../configs/api";
 
 const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
-    const {organization} = useOrganization();
-
+    const { getToken } = useAuth();
     const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
@@ -17,18 +17,36 @@ const InviteMemberDialog = ({ isDialogOpen, setIsDialogOpen }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setIsSubmitting(true);
-        try {
-            await organization.inviteMember({
-                emailAddress: formData.email,
-                role: formData.role,
-            });
-            toast.success("Invitation sent successfully!");
-            setIsDialogOpen(false);
-        } catch (error) {
-            toast.error(error?.response?.data?.message || error.message)
+        if (!currentWorkspace?.id) {
+            toast.error("Please select a workspace first.");
+            return;
         }
 
+        setIsSubmitting(true);
+        try {
+            const token = await getToken();
+            const { data } = await api.post(
+                '/api/workspaces/invite-member',
+                {
+                    workspaceId: currentWorkspace.id,
+                    email: formData.email,
+                    role: formData.role === 'org:admin' ? 'ADMIN' : 'MEMBER'
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            toast.success(data?.message || `Invitation email sent to ${formData.email}!`);
+            setIsDialogOpen(false);
+            setFormData({ email: "", role: "org:member" });
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!isDialogOpen) return null;

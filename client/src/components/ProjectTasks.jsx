@@ -1,11 +1,11 @@
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { deleteTask, updateTask } from "../features/workspaceSlice";
 import { Bug, CalendarIcon, GitCommit, MessageSquare, Square, Trash, XIcon, Zap } from "lucide-react";
-import { useAuth} from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import api from "../configs/api";
 
 const typeIcons = {
@@ -24,9 +24,11 @@ const priorityTexts = {
 
 const ProjectTasks = ({ tasks }) => {
 
-    const {getToken} = useAuth();
+    const { getToken } = useAuth();
+    const { user } = useUser();
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace || null);
     const [selectedTasks, setSelectedTasks] = useState([]);
 
     const [filters, setFilters] = useState({
@@ -35,6 +37,22 @@ const ProjectTasks = ({ tasks }) => {
         priority: "",
         assignee: "",
     });
+
+    // Determine if the current user is a workspace admin/owner
+    const isAdmin = useMemo(() => {
+        if (!user || !currentWorkspace) return false;
+        const clerkUserId = user.id;
+        if (currentWorkspace.ownerId === clerkUserId) return true;
+        return currentWorkspace.members?.some(
+            m => m.userId === clerkUserId && m.role === 'ADMIN'
+        );
+    }, [user, currentWorkspace]);
+
+    // A user can change status if they are the assignee OR an admin
+    const canChangeStatus = (task) => {
+        if (!user) return false;
+        return isAdmin || task.assigneeId === user.id;
+    };
 
     const assigneeList = useMemo(
         () => Array.from(new Set(tasks.map((t) => t.assignee?.name).filter(Boolean))),
@@ -154,7 +172,7 @@ const ProjectTasks = ({ tasks }) => {
                     </button>
                 )}
 
-                {selectedTasks.length > 0 && (
+                {isAdmin && selectedTasks.length > 0 && (
                     <button type="button" onClick={handleDelete} className="px-3 py-1 flex items-center gap-2 rounded bg-gradient-to-br from-indigo-400 to-indigo-500 text-zinc-100 dark:text-zinc-200 text-sm transition-colors" >
                         <Trash className="size-3" /> Delete
                     </button>
@@ -204,7 +222,13 @@ const ProjectTasks = ({ tasks }) => {
                                                     </span>
                                                 </td>
                                                 <td onClick={e => e.stopPropagation()} className="px-4 py-2">
-                                                    <select name="status" onChange={(e) => handleStatusChange(task.id, e.target.value)} value={task.status} className="group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 cursor-pointer" >
+                                                    <select
+                                                        name="status"
+                                                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                                                        value={task.status}
+                                                        disabled={!canChangeStatus(task)}
+                                                        className={`group-hover:ring ring-zinc-100 outline-none px-2 pr-4 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 ${canChangeStatus(task) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                                                    >
                                                         <option value="TODO">To Do</option>
                                                         <option value="IN_PROGRESS">In Progress</option>
                                                         <option value="DONE">Done</option>
@@ -263,7 +287,13 @@ const ProjectTasks = ({ tasks }) => {
 
                                         <div>
                                             <label className="text-zinc-600 dark:text-zinc-400 text-xs">Status</label>
-                                            <select name="status" onChange={(e) => handleStatusChange(task.id, e.target.value)} value={task.status} className="w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200" >
+                                            <select
+                                                name="status"
+                                                onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                                                value={task.status}
+                                                disabled={!canChangeStatus(task)}
+                                                className={`w-full mt-1 bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-300 dark:ring-zinc-700 outline-none px-2 py-1 rounded text-sm text-zinc-900 dark:text-zinc-200 ${canChangeStatus(task) ? '' : 'cursor-not-allowed opacity-50'}`}
+                                            >
                                                 <option value="TODO">To Do</option>
                                                 <option value="IN_PROGRESS">In Progress</option>
                                                 <option value="DONE">Done</option>

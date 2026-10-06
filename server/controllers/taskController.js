@@ -12,14 +12,17 @@ export const createTask = async (req, res) => {
         //check if user has admin role for project
         const project = await prisma.project.findUnique({
             where: { id: projectId },
-            include: { members: { include: { user: true } } }
+            include: {
+                members: { include: { user: true } },
+                workspace: { include: { members: { include: { user: true } } } }
+            }
         })
         if (!project) {
             return res.status(404).json({ message: 'Project not found' })
         } else if (project.team_lead !== userId) {
             return res.status(403).json({ message: 'You do not have permission to update tasks for this project' })
-        } else if (assigneeId && !project.members.find((member) => member.user.id === assigneeId)) {
-            return res.status(400).json({ message: 'Assignee is not a member of the project' })
+        } else if (assigneeId && !project.workspace.members.find((member) => member.user.id === assigneeId)) {
+            return res.status(400).json({ message: 'Assignee is not a member of the workspace' })
         }
 
         const task = await prisma.task.create({
@@ -60,29 +63,43 @@ export const createTask = async (req, res) => {
 //update task
 export const updateTask = async (req, res) => {
     try {
-
         const task = await prisma.task.findUnique({
             where: { id: req.params.id }
         });
         if (!task) {
             return res.status(404).json({ message: 'Task not found' })
         }
-        const { userId } = await req.auth() //logged in users ID
+        const { userId } = await req.auth()
 
-        //check if user has admin role for project
         const project = await prisma.project.findUnique({
             where: { id: task.projectId },
-            include: { members: { include: { user: true } } }
+            include: {
+                workspace: { include: { members: true } }
+            }
         })
         if (!project) {
             return res.status(404).json({ message: 'Project not found' })
-        } else if (project.team_lead !== userId) {
-            return res.status(403).json({ message: 'You do not have permission to create tasks for this project' })
+        }
+
+        const isTeamLead = project.team_lead === userId;
+        const isAssignee = task.assigneeId === userId;
+        const isWorkspaceAdmin = project.workspace.ownerId === userId ||
+            project.workspace.members.some(m => m.userId === userId && m.role === 'ADMIN');
+
+        if (!isTeamLead && !isAssignee && !isWorkspaceAdmin) {
+            return res.status(403).json({ message: 'You do not have permission to update this task' })
+        }
+
+        // Assignees (who are not admins/team lead) can only change the status
+        let updateData = req.body;
+        if (isAssignee && !isTeamLead && !isWorkspaceAdmin) {
+            updateData = { status: req.body.status };
         }
 
         const updatedTask = await prisma.task.update({
             where: { id: req.params.id },
-            data: req.body
+            data: updateData,
+            include: { assignee: true }
         });
 
         res.json({ task: updatedTask, message: 'Task updated successfully' });
@@ -96,7 +113,7 @@ export const updateTask = async (req, res) => {
 //delete task
 export const deleteTask = async (req, res) => {
     try {
-        const { userId } = await req.auth() //logged in users ID
+        const { userId } = await req.auth()
         const { taskIds } = req.body
         const tasks = await prisma.task.findMany({
             where: { id: { in: taskIds } }
@@ -107,12 +124,20 @@ export const deleteTask = async (req, res) => {
 
         const project = await prisma.project.findUnique({
             where: { id: tasks[0].projectId },
-            include: { members: { include: { user: true } } }
+            include: {
+                workspace: { include: { members: true } }
+            }
         })
         if (!project) {
             return res.status(404).json({ message: 'Project not found' })
-        } else if (project.team_lead !== userId) {
-            return res.status(403).json({ message: 'You do not have permission to delete tasks for this project' })
+        }
+
+        const isTeamLead = project.team_lead === userId;
+        const isWorkspaceAdmin = project.workspace.ownerId === userId ||
+            project.workspace.members.some(m => m.userId === userId && m.role === 'ADMIN');
+
+        if (!isTeamLead && !isWorkspaceAdmin) {
+            return res.status(403).json({ message: 'Only admins can delete tasks' })
         }
 
         await prisma.task.deleteMany({

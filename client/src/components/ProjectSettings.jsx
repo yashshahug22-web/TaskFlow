@@ -2,10 +2,10 @@ import { format } from "date-fns";
 import { Plus, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import AddProjectMember from "./AddProjectMember";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useAuth } from "@clerk/clerk-react";
 import api from "../configs/api"
-import { fetchWorkspaces } from "../features/workspaceSlice";
+import { updateWorkspace } from "../features/workspaceSlice";
 import toast from "react-hot-toast";
 
 
@@ -13,6 +13,7 @@ export default function ProjectSettings({ project }) {
 
     const dispatch = useDispatch();
     const { getToken } = useAuth();
+    const currentWorkspace = useSelector((state) => state.workspace.currentWorkspace);
 
     const [formData, setFormData] = useState({
         name: "New Website Launch",
@@ -32,14 +33,19 @@ export default function ProjectSettings({ project }) {
         setIsSubmitting(true);
         toast.loading("Saving...")
         try {
-            const { data } = await api.put('/api/projects', formData,
+            const { data } = await api.put(`/api/projects/${formData.id}`, formData,
                 {
                     headers: {
                         Authorization: `Bearer ${await getToken()}`
                     }
                 })
-            setIsDialogOpen(false);
-            dispatch(fetchWorkspaces({ getToken }))
+
+            // Update the project in the Redux store locally — no full re-fetch needed
+            const updatedProjects = currentWorkspace.projects.map((p) =>
+                p.id === data.project.id ? data.project : p
+            );
+            dispatch(updateWorkspace({ ...currentWorkspace, projects: updatedProjects }));
+
             toast.dismissAll();
             toast.success(data.message);
 

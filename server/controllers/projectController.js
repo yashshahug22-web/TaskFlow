@@ -108,7 +108,7 @@ export const updateProject = async (req, res) => {
                 return res.status(403).json({ message: "You dont have permission to create projects in this workspace." })
             }
         }
-        const project = await prisma.project.update({
+        await prisma.project.update({
             where: { id: req.params.id },
             data: {
                 workspaceId,
@@ -119,6 +119,15 @@ export const updateProject = async (req, res) => {
                 progress,
                 start_date: start_date ? new Date(start_date) : null,
                 end_date: end_date ? new Date(end_date) : null
+            }
+        })
+
+        const project = await prisma.project.findUnique({
+            where: { id: req.params.id },
+            include: {
+                members: { include: { user: true } },
+                tasks: { include: { assignee: true, comments: { include: { user: true } } } },
+                owner: true
             }
         })
 
