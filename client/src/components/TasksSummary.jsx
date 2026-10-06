@@ -11,14 +11,16 @@ export default function TasksSummary() {
 
     // Get all tasks for all projects in current workspace
     useEffect(() => {
-        if (currentWorkspace) {
-            setTasks(currentWorkspace.projects.flatMap((project) => project.tasks));
+        if (currentWorkspace && currentWorkspace.projects) {
+            setTasks((currentWorkspace.projects || []).flatMap((project) => project?.tasks || []));
+        } else {
+            setTasks([]);
         }
     }, [currentWorkspace]);
 
-    const myTasks = tasks.filter(i => i.assigneeId === user.id);
-    const overdueTasks = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE');
-    const inProgressIssues = tasks.filter(i => i.status === 'IN_PROGRESS');
+    const myTasks = tasks.filter(i => i?.assigneeId === user?.id);
+    const overdueTasks = tasks.filter(t => t?.due_date && new Date(t.due_date) < new Date() && t.status !== 'DONE');
+    const inProgressIssues = tasks.filter(i => i?.status === 'IN_PROGRESS');
 
     const summaryCards = [
         {

@@ -46,8 +46,8 @@ const Layout = () => {
         )
     }
 
-    // While fetching workspaces, or while syncing organizations from Clerk into DB
-    if (loading || !hasFetched || (userMemberships?.data?.length > 0 && workspaces.length === 0)) {
+    // While fetching workspaces
+    if (loading || !hasFetched) {
         return (
             <div className='flex items-center justify-center h-screen bg-white dark:bg-zinc-950'>
                 <Loader2Icon className="size-7 text-blue-500 animate-spin" />
@@ -63,6 +63,21 @@ const Layout = () => {
                     skipInvitationScreen
                     afterCreateOrganizationUrl="/"
                 />
+            </div>
+        )
+    }
+
+    // If workspaces failed to load despite user having organizations
+    if (user && workspaces.length === 0) {
+        return (
+            <div className='flex flex-col items-center justify-center h-screen bg-white dark:bg-zinc-950 gap-4 text-center p-4'>
+                <p className='text-zinc-700 dark:text-zinc-300 font-medium'>Syncing workspaces...</p>
+                <button
+                    onClick={() => dispatch(fetchWorkspaces({ getToken }))}
+                    className='px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition'
+                >
+                    Retry
+                </button>
             </div>
         )
     }
